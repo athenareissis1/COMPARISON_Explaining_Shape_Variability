@@ -66,8 +66,8 @@ args.out_dir = osp.join(args.work_dir, 'data', 'out', args.exp_name)
 args.checkpoints_dir = osp.join(args.out_dir, 'checkpoints')
 #print(args)
 
-utils.makedirs(args.out_dir)
-utils.makedirs(args.checkpoints_dir)
+utils_m.makedirs(args.out_dir)
+utils_m.makedirs(args.checkpoints_dir)
 
 writer = writer.Writer(args)
 device = torch.device('cuda', args.device_idx)
@@ -133,49 +133,49 @@ else:
         tmp = pickle.load(f, encoding='latin1')
 
 spiral_indices_list = [
-        utils.preprocess_spiral(tmp['face'][idx], args.seq_length[idx],
+        utils_m.preprocess_spiral(tmp['face'][idx], args.seq_length[idx],
                                 tmp['vertices'][idx],
                                 args.dilation[idx]).to(device)
         for idx in range(len(tmp['face']) - 1)
 ]
 down_transform_list = [
-    utils.to_sparse(down_transform).to(device)
+    utils_m.to_sparse(down_transform).to(device)
     for down_transform in tmp['down_transform']
 ]
 up_transform_list = [
-    utils.to_sparse(up_transform).to(device)
+    utils_m.to_sparse(up_transform).to(device)
     for up_transform in tmp['up_transform']
 ]
 
 def objective(trial):
 
-    args.epochs = trial.suggest_int("epochs", 100, 400, step=100)
-    args.batch_size = trial.suggest_int("batch_size", 4, 32, 4)
-    args.wcls = trial.suggest_int("w_cls", 1, 100)
-    args.beta = trial.suggest_float("beta", 0.001, 0.3, log=True)
-    args.lr = trial.suggest_float("learning_rate", 0.0001, 0.001, log=True)
-    args.lr_decay = trial.suggest_float("learning_rate_decay", 0.70, 0.99, step=0.01)
-    args.delta = trial.suggest_float("delta", 0.1, 0.9, step=0.1)
-    args.decay_step = trial.suggest_int("decay_step", 1, 50)
-    args.latent_channels = trial.suggest_int("latent_channels", 12, 16, step=4)
-    args.threshold = trial.suggest_float("threshold", 0.005, 0.05, step=0.005)
-    args.temperature = trial.suggest_int("temperature", 1, 200, step=20)
+    args.epochs = 100
+    args.batch_size = 24
+    args.wcls = 50
+    args.beta = 0.0015
+    args.lr = .0001
+    args.lr_decay = 0.8
+    args.delta = 0.5
+    args.decay_step = 20
+    args.latent_channels = 12
+    args.threshold = .025
+    args.temperature = 151
 
     sequence_length = trial.suggest_int("sequence_length", 5, 50)
     args.seq_length = [sequence_length, sequence_length, sequence_length, sequence_length]
 
-    dilation = trial.suggest_int("dilation", 1, 2)
-    args.dilation = [dilation, dilation, dilation, dilation]
+    #dilation = trial.suggest_int("dilation", 1, 2)
+    args.dilation = [2, 2, 2, 2]
     
-    out_channel = trial.suggest_int("out_channel", 8, 32, 8)
-    args.out_channels = [out_channel, out_channel, out_channel, 2*out_channel]
+    #out_channel = trial.suggest_int("out_channel", 8, 32, 8)
+    args.out_channels = [8, 8, 8, 2*8]
     print(args)    
 
     model = AE(args.in_channels, args.out_channels, args.latent_channels,
             spiral_indices_list, down_transform_list,
             up_transform_list).to(device)
 
-    print('Number of parameters: {}'.format(utils.count_parameters(model)))
+    print('Number of parameters: {}'.format(utils_m.count_parameters(model)))
     print(model)
 
     optimizer = torch.optim.Adam(model.parameters(),
@@ -246,9 +246,9 @@ def objective(trial):
     df1 = pd.DataFrame(angles.cpu().numpy())
     df2 = pd.DataFrame(thick.cpu().numpy())
     # File path for saving the data
-    excel_file_path_latent = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/latent_codes.csv"
-    excel_file_path_angles = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/angles.csv"
-    excel_file_path_thick = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/thick.csv"
+    excel_file_path_latent = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/latent_codes.csv"
+    excel_file_path_angles = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/angles.csv"
+    excel_file_path_thick = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/thick.csv"
     # Save the DataFrame to an Excel file
     df.to_csv(excel_file_path_latent, index=False)
     df1.to_csv(excel_file_path_angles, index=False)
@@ -258,12 +258,12 @@ def objective(trial):
                                                     sap_score, pcc_thick, sap_score_thick, euclidean_distance, trial.number)
 
 
-    out_error_fp = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/test.txt'
+    out_error_fp = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/test.txt'
     with open(out_error_fp, 'a') as log_file:
         log_file.write('{:s}\n'.format(message))
 
     if sap_score >= 0:
-        model_path = f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/{trial.number}/"
+        model_path = f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/{trial.number}/"
         os.makedirs(model_path)
         torch.save(sap_score, f"{model_path}sap_score.pt") 
         torch.save(sap_score_thick, f"{model_path}sap_score_thick.pt") 
@@ -288,7 +288,7 @@ def objective(trial):
 class LogAfterEachTrial:
     def __call__(self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
         trials = study.trials
-        torch.save(trials, "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute/intermediate_trials.pt")
+        torch.save(trials, "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_attribute_new/intermediate_trials.pt")
 
 log_trials = LogAfterEachTrial()
 study = optuna.create_study(directions=['minimize', 'maximize', 'maximize'])
