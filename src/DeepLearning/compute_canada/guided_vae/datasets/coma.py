@@ -4,7 +4,7 @@ from glob import glob
 from sklearn.model_selection import train_test_split
 import torch
 from torch_geometric.data import InMemoryDataset, extract_zip
-from utils.read import read_mesh
+from read import read_mesh
 import random
 from tqdm import tqdm
 

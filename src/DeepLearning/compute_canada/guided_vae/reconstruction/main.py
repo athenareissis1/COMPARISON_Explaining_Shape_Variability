@@ -11,7 +11,12 @@ from psbody.mesh import Mesh
 from scipy import stats
 from reconstruction import AE, run, eval_error
 from datasets import MeshData
-from utils import utils, writer, DataLoader, mesh_sampling, sap, point_biserial_correlation
+import utils
+import writer
+import mesh_sampling
+from dataloader import DataLoader
+from sap import sap
+from pb_correlation import point_biserial_correlation
 import optuna
 from contextlib import redirect_stdout
 import shutil

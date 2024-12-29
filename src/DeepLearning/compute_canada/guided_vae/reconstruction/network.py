@@ -57,6 +57,8 @@ class AE(nn.Module):
         self.up_transform = up_transform
         self.num_vert = self.down_transform[-1].size(0)
         self.training = training
+        self.mu = nn.Parameter(torch.randn(latent_channels))
+        self.log_var = nn.Parameter(torch.randn(latent_channels))
 
         # encoder
         self.en_layers = nn.ModuleList()
@@ -116,8 +118,10 @@ class AE(nn.Module):
         for name, param in self.named_parameters():
             if 'bias' in name:
                 nn.init.constant_(param, 0)
-            else:
+            elif param.dim() > 1:
                 nn.init.xavier_uniform_(param)
+        nn.init.normal_(self.mu, mean=0, std=1)
+        nn.init.normal_(self.log_var, mean=0, std=1)
 
     def encoder(self, x):
         for i, layer in enumerate(self.en_layers):
@@ -157,6 +161,7 @@ class AE(nn.Module):
         return sample
 
     def cls(self, z): # first excitation
+        if z.dim() == 
         z = torch.split(z, 1, 1)[0]
         return self.cls_sq(z)
 
@@ -165,10 +170,10 @@ class AE(nn.Module):
         return self.reg_sq_2(z)    
 
     def forward(self, x, *indices):
-        mu, log_var = self.encoder(x)
-        z = self.reparameterize(mu, log_var)
+        #mu, log_var = self.encoder(x)
+        z = self.reparameterize(self.mu, self.log_var)
         out = self.decoder(z)
-        return out, mu, log_var, self.cls(z), self.reg_2(z)
+        return out, self.mu, self.log_var, self.cls(z), self.reg_2(z)
 
 # Inhibition classifier
 class Classifier(nn.Module):
