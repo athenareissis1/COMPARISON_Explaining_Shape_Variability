@@ -46,7 +46,7 @@ class SpiralDeblock(nn.Module):
 
 class AE(nn.Module):
     def __init__(self, in_channels, out_channels, latent_channels,
-                 spiral_indices, down_transform, up_transform, training=True):
+                 spiral_indices, down_transform, up_transform, total_samples, training=True):
         super(AE, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -57,8 +57,10 @@ class AE(nn.Module):
         self.up_transform = up_transform
         self.num_vert = self.down_transform[-1].size(0)
         self.training = training
-        self.mu = nn.Parameter(torch.randn(latent_channels))
-        self.log_var = nn.Parameter(torch.randn(latent_channels))
+        self.mu = nn.Parameter(torch.randn(total_samples, latent_channels))
+        #nn.init.normal_(self.mu, mean=0, std=1)
+        self.log_var = nn.Parameter(torch.randn(total_samples, latent_channels))
+        #nn.init.normal_(self.log_var, mean=0, std=1)
 
         # encoder
         self.en_layers = nn.ModuleList()
@@ -161,7 +163,6 @@ class AE(nn.Module):
         return sample
 
     def cls(self, z): # first excitation
-        if z.dim() == 
         z = torch.split(z, 1, 1)[0]
         return self.cls_sq(z)
 
@@ -169,11 +170,11 @@ class AE(nn.Module):
         z = torch.split(z, 1, 1)[1]
         return self.reg_sq_2(z)    
 
-    def forward(self, x, *indices):
+    def forward(self, x, idx, *indices):
         #mu, log_var = self.encoder(x)
-        z = self.reparameterize(self.mu, self.log_var)
+        z = self.reparameterize(self.mu[idx], self.log_var[idx])
         out = self.decoder(z)
-        return out, self.mu, self.log_var, self.cls(z), self.reg_2(z)
+        return out, self.mu[idx], self.log_var[idx], self.cls(z), self.reg_2(z)
 
 # Inhibition classifier
 class Classifier(nn.Module):

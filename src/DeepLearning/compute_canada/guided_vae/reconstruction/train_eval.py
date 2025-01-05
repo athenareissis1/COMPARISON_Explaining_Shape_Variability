@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from reconstruction import Regressor, Classifier
 from reconstruction.loss import ClsCorrelationLoss, RegCorrelationLoss, SNNLoss, SNNRegLoss
+import torch.nn as nn
 
 def loss_function(original, reconstruction, mu, log_var, beta):
     reconstruction_loss = F.l1_loss(reconstruction, original, reduction='mean')
@@ -13,6 +14,13 @@ def loss_function(original, reconstruction, mu, log_var, beta):
 
 def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
         device, beta, w_cls, guided, guided_contrastive_loss, correlation_loss, latent_channels, weight_decay_c, temp):
+    
+    num_samples = len(train_loader.dataset)
+    #mu = nn.Parameter(torch.zeros(num_samples, latent_channels))
+    #log_var = nn.Parameter(torch.zeros(num_samples, latent_channels))
+
+    #nn.init.normal_(mu, mean=0, std=1)
+    #nn.init.normal_(log_var, mean=0, std=1)    
     
     model_c = Classifier(latent_channels).to(device)
     optimizer_c = torch.optim.Adam(model_c.parameters(), lr=1e-3, weight_decay=weight_decay_c)
@@ -38,8 +46,8 @@ def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
 
         writer.print_info(info)
         writer.save_checkpoint(model, optimizer, scheduler, epoch)
-        torch.save(model.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/model_state_dict.pt")
-        torch.save(model_c.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/model_c_state_dict.pt")
+        torch.save(model.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/model_state_dict.pt")
+        torch.save(model_c.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/model_c_state_dict.pt")
 
 def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, loader, device, beta, w_cls, guided, guided_contrastive_loss, correlation_loss, temp):
     model.train()
@@ -64,14 +72,20 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
 	    # Load Data
         x = data.x.to(device)
         label = data.y.to(device)
-        #print(label[:, :, 1])
-        #print(label)
+        idx = data.idx.to(device)
+        idx = torch.squeeze(idx)
+        #print(idx.shape)
+        #print(label.shape)
+        #print(label[:, :, 0])
+        #print(idx)
 	    # VAE + Exhibition
         optimizer.zero_grad()
-        out, mu, log_var, re, re_2 = model(x) # re2 for excitation
+        out, mu, log_var, re, re_2 = model(x, idx) # re2 for excitation
+        #print("Shape of x: "+str(x.shape))
+        #print("Shape of out: "+str(out.shape))
         loss = loss_function(x, out, mu, log_var, beta)       
         if guided:
-            loss_cls = F.binary_cross_entropy(re, label[:, :, 1], reduction='mean')
+            loss_cls = F.binary_cross_entropy(re, label[:, :, 0], reduction='mean')
             loss += loss_cls * w_cls
             #print(re[0:5])
             #print(label[:, :, 0][0:5])
@@ -85,14 +99,14 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             z = model.reparameterize(mu, log_var)
             #print(z.shape)
             #print(label[:, :, 0].shape)
-            loss_snn = SNN_Loss(z[:,0], label[:, :, 1])
+            loss_snn = SNN_Loss(z[:,0], label[:, :, 0])
             loss += loss_snn * w_cls
             #print(loss_snn.item())
             snnl += loss_snn.item()
 
             #Regression Loss
             SNN_Loss_Reg = SNNRegLoss(temp)
-            loss_snn_reg = SNN_Loss_Reg(z[:,1], label[:, :, 0])
+            loss_snn_reg = SNN_Loss_Reg(z[:,1], label[:, :, 2])
             loss += loss_snn_reg * w_cls
             #print(loss_snn.item())
             snnl_reg += loss_snn_reg.item()
@@ -104,10 +118,10 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             #print(z)
             #print(label[:, :, 1])
             #cls
-            loss_corr_cls = corr_loss_cls(z, label[:, :, 1])
+            loss_corr_cls = corr_loss_cls(z, label[:, :, 0])
             loss += loss_corr_cls * w_cls
             #reg
-            loss_corr_reg = corr_loss_reg(z, label[:, :, 0])
+            loss_corr_reg = corr_loss_reg(z, label[:, :, 2])
             loss += loss_corr_reg * w_cls
             #print(corr_loss.item())
             corrl_cls += loss_corr_cls.item()
@@ -124,7 +138,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             z = model.reparameterize(mu, log_var).detach()
             z = z[:, 1:]
             cls1 = model_c(z)
-            loss = F.binary_cross_entropy(cls1, label[:, :, 1], reduction='mean')
+            loss = F.binary_cross_entropy(cls1, label[:, :, 0], reduction='mean')
             cls1_error += loss.item()
             loss *= w_cls
             loss.backward()
@@ -136,7 +150,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             z = model.reparameterize(mu, log_var)
             z = z[:, 1:]
             cls2 = model_c(z)
-            label1 = torch.empty_like(label[:, :, 1]).fill_(0.5)
+            label1 = torch.empty_like(label[:, :, 0]).fill_(0.5)
             loss = F.binary_cross_entropy(cls2, label1, reduction='mean')
             cls2_error += loss.item()
             loss *= w_cls
@@ -147,7 +161,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             out, mu, log_var, re, re_2 = model(x) # re2 for excitation
             loss = loss_function(x, out, mu, log_var, beta)  
             optimizer.zero_grad()
-            loss_cls_2 = F.mse_loss(re_2, label[:, :, 0], reduction='mean')
+            loss_cls_2 = F.mse_loss(re_2, label[:, :, 2], reduction='mean')
             loss += loss_cls_2 * w_cls
             #print(re_2[0:5])
             #print(label[:, :, 1][0:5])
@@ -162,7 +176,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             z = model.reparameterize(mu, log_var).detach()
             z = z[:, torch.cat((torch.tensor([0]), torch.tensor(range(2, z.shape[1]))), dim=0)]
             cls1_2 = model_c_2(z)
-            loss = F.mse_loss(cls1_2, label[:, :, 0], reduction='mean')
+            loss = F.mse_loss(cls1_2, label[:, :, 2], reduction='mean')
             cls1_error_2 += loss.item()
             loss *= w_cls
             loss.backward()
@@ -174,7 +188,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             z = model.reparameterize(mu, log_var)
             z = z[:, torch.cat((torch.tensor([0]), torch.tensor(range(2, z.shape[1]))), dim=0)]
             cls2_2 = model_c_2(z)
-            label1 = torch.empty_like(label[:, :, 1]).fill_(0.5)
+            label1 = torch.empty_like(label[:, :, 2]).fill_(0.5)
             loss = F.mse_loss(cls2_2, label1, reduction='mean')
             cls2_error_2 += loss.item()
             loss *= w_cls
@@ -182,8 +196,8 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             optimizer.step()
     #print(corrl_cls)
     #print(corrl_reg)
-    #print("snnl: "+str(snnl))
-    #print(snnl_reg)
+    print("snnl: "+str(snnl))
+    print("snnl_reg: "+str(snnl_reg))
     return total_loss / len(loader)
 
 
@@ -202,15 +216,17 @@ def test(model, loader, device, beta):
             if has_nan:
                 continue
             y = data.y.to(device)
-            pred, mu, log_var, re, re_2 = model(x)
+            idx = data.idx.to(device)
+            idx = torch.squeeze(idx)
+            pred, mu, log_var, re, re_2 = model(x, idx)
             has_nan_1 = torch.isnan(re).any().item()
             if has_nan_1:
                 continue
             #print(re.shape)
             total_loss += loss_function(x, pred, mu, log_var, beta)
             recon_loss += F.l1_loss(pred, x, reduction='mean')
-            reg_loss += F.binary_cross_entropy(re, y[:, :, 1], reduction='mean')
-            reg_loss_2 += F.mse_loss(re_2, y[:, :, 0], reduction='mean')
+            reg_loss += F.binary_cross_entropy(re, y[:, :, 0], reduction='mean')
+            reg_loss_2 += F.mse_loss(re_2, y[:, :, 2], reduction='mean')
 
     return total_loss / len(loader)
 
@@ -224,8 +240,10 @@ def eval_error(model, test_loader, device, meshdata, out_dir):
     with torch.no_grad():
         for i, data in enumerate(test_loader):
             x = data.x.to(device)
+            idx = data.idx.to(device)
+            idx = torch.squeeze(idx)
             # pred = model(x)
-            pred, mu, log_var, re, re_2 = model(x)
+            pred, mu, log_var, re, re_2 = model(x, idx)
             num_graphs = data.num_graphs
             reshaped_pred = (pred.view(num_graphs, -1, 3).cpu() * std) + mean
             reshaped_x = (x.view(num_graphs, -1, 3).cpu() * std) + mean

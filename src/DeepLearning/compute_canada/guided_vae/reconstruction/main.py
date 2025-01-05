@@ -54,8 +54,8 @@ parser.add_argument('--wcls', type=int, default=1)
 
 # others
 parser.add_argument('--correlation_loss', type=bool, default=False)
-parser.add_argument('--guided_contrastive_loss', type=bool, default=False)
-parser.add_argument('--guided', type=bool, default=True)
+parser.add_argument('--guided_contrastive_loss', type=bool, default=True)
+parser.add_argument('--guided', type=bool, default=False)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--temperature', type=int, default=100)
 
@@ -107,8 +107,13 @@ meshdata = MeshData(args.data_fp,
                     split=args.split,
                     test_exp=args.test_exp)
 train_loader = DataLoader(meshdata.train_dataset, batch_size=args.batch_size)
+num_of_train_samples = len(train_loader.dataset)
 val_loader = DataLoader(meshdata.val_dataset, batch_size=args.batch_size)
+num_of_val_samples = len(val_loader.dataset)
 test_loader = DataLoader(meshdata.test_dataset, batch_size=args.batch_size)
+num_of_test_samples = len(test_loader.dataset)
+
+total_samples = num_of_train_samples + num_of_val_samples + num_of_test_samples
 
 # generate/load transform matrices
 transform_fp = osp.join(args.data_fp, 'transform', 'transform.pkl')
@@ -152,7 +157,7 @@ up_transform_list = [
 def objective(trial):
 
     args.epochs = trial.suggest_int("epochs", 100, 400, step=100)
-    args.batch_size = trial.suggest_int("batch_size", 4, 32, 4)
+    #args.batch_size = trial.suggest_int("batch_size", 4, 32, 4)
     args.wcls = trial.suggest_int("w_cls", 1, 100)
     args.beta = trial.suggest_float("beta", 0.001, 0.3, log=True)
     args.lr = trial.suggest_float("learning_rate", 0.0001, 0.001, log=True)
@@ -173,7 +178,7 @@ def objective(trial):
 
     model = AE(args.in_channels, args.out_channels, args.latent_channels,
             spiral_indices_list, down_transform_list,
-            up_transform_list).to(device)
+            up_transform_list, total_samples).to(device)
 
     print('Number of parameters: {}'.format(utils.count_parameters(model)))
     print(model)
@@ -186,14 +191,47 @@ def objective(trial):
                                                 args.decay_step,
                                                 gamma=args.lr_decay)
 
-    args.guided = True
-    args.guided_contrastive_loss = False
+    args.guided = False
+    args.guided_contrastive_loss = True
     args.correlation_loss = False
 
     run(model, train_loader, val_loader, args.epochs, optimizer, scheduler,
         writer, device, args.beta, args.wcls, args.guided, args.guided_contrastive_loss, args.correlation_loss, args.latent_channels, args.weight_decay_c, args.temperature)
 
     euclidean_distance = eval_error(model, test_loader, device, meshdata, args.out_dir)
+
+    def loss_function(original, reconstruction, mu, log_var, beta):
+        reconstruction_loss = F.l1_loss(reconstruction, original, reduction='mean')
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+
+        return reconstruction_loss + beta*kld_loss
+
+    # optimize mu for latent space z
+    # Freeze model parameters
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # Extract and optimize a subset of mu
+    mu_subset = model.mu[idx].detach().clone().requires_grad_(True)  # Detach, clone, and make learnable
+    optimizer_mu = torch.optim.Adam([mu_subset], lr=1e-3)
+    
+    for epoch in range(300):
+        total_loss = 0
+        for i, data in enumerate(test_loader):
+            x = data.x.to(device)
+            y = data.y.to(device)
+            idx = data.idx.to(device)
+            idx = torch.squeeze(idx)
+            
+            optimizer_mu.zero_grad()
+            recon, mu, log_var, re, re_2 = model(x, idx)
+            mu = mu.clone().detach().requires_grad_(True)  # Ensure mu is a learnable parameter
+            loss = loss_function(x, recon, mu, log_var, args.beta)
+            loss.backward()
+            optimizer_mu.step()
+            total_loss += loss.item()
+        
+        print(f'Epoch {epoch+1}, Loss: {total_loss / len(test_loader)}')
 
     angles = []
     thick = []
@@ -203,11 +241,13 @@ def objective(trial):
         for i, data in enumerate(test_loader):
             x = data.x.to(device)
             y = data.y.to(device)
-            recon, mu, log_var, re, re_2 = model(x)
+            idx = data.idx.to(device)
+            idx = torch.squeeze(idx)
+            recon, mu, log_var, re, re_2 = model(x, idx)
             z = model.reparameterize(mu, log_var)
             latent_codes.append(z)
-            angles.append(y[:, :, 1])
-            thick.append(y[:, :, 0]) 
+            angles.append(y[:, :, 0])
+            thick.append(y[:, :, 2]) 
             re_pre.append(re)
     latent_codes = torch.concat(latent_codes)
     angles = torch.concat(angles).view(-1,1)
@@ -245,9 +285,9 @@ def objective(trial):
     df1 = pd.DataFrame(angles.cpu().numpy())
     df2 = pd.DataFrame(thick.cpu().numpy())
     # File path for saving the data
-    excel_file_path_latent = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/latent_codes.csv"
-    excel_file_path_angles = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/disease.csv"
-    excel_file_path_thick = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/age.csv"
+    excel_file_path_latent = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/latent_codes.csv"
+    excel_file_path_angles = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/bump_presence.csv"
+    excel_file_path_thick = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/thick.csv"
     # Save the DataFrame to an Excel file
     df.to_csv(excel_file_path_latent, index=False)
     df1.to_csv(excel_file_path_angles, index=False)
@@ -257,12 +297,12 @@ def objective(trial):
                                                     sap_score, pcc_thick, sap_score_thick, euclidean_distance, trial.number)
 
 
-    out_error_fp = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/test.txt'
+    out_error_fp = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/test.txt'
     with open(out_error_fp, 'a') as log_file:
         log_file.write('{:s}\n'.format(message))
 
     if sap_score >= 0:
-        model_path = f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/{trial.number}/"
+        model_path = f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/{trial.number}/"
         os.makedirs(model_path)
         torch.save(sap_score, f"{model_path}sap_score.pt") 
         torch.save(sap_score_thick, f"{model_path}sap_score_thick.pt") 
@@ -281,13 +321,15 @@ def objective(trial):
         shutil.copy("/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/reconstruction/network.py", f"{model_path}network.py")
         shutil.copy("/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/conv/spiralconv.py", f"{model_path}spiralconv.py")
 
+    for param in model.parameters():
+        param.requires_grad = True
 
     return euclidean_distance, sap_score, sap_score_thick
 
 class LogAfterEachTrial:
     def __call__(self, study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
         trials = study.trials
-        torch.save(trials, "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/models/intermediate_trials.pt")
+        torch.save(trials, "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_auto_decoder/intermediate_trials.pt")
 
 log_trials = LogAfterEachTrial()
 study = optuna.create_study(directions=['minimize', 'maximize', 'maximize'])

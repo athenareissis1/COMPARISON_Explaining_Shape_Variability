@@ -91,7 +91,7 @@ class CoMA(InMemoryDataset):
     def process(self):
         print('Processing...')
 
-        labels = torch.load(f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/hippocampus/labels.pt")
+        labels = torch.load(f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/labels.pt")
 
         #X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), stratify=list(labels.values()), test_size=0.2, random_state=0)
         X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), test_size=0.2, random_state=28)
@@ -104,7 +104,7 @@ class CoMA(InMemoryDataset):
         #X_val = X_test[:51]
         #X_test_new = X_test[51:]
 
-        fps = glob(osp.join(self.raw_dir, 'hippocampus/*.ply'))
+        fps = glob(osp.join(self.raw_dir, 'torus/*.ply'))
         '''
         if len(fps) == 0:
             extract_zip(self.raw_paths[0], self.raw_dir, log=False)
@@ -121,14 +121,14 @@ class CoMA(InMemoryDataset):
             if self.split == 'interpolation':
                 #if (idx % 100) < 10:
                 if subject in X_test:
-                    data = read_mesh(fp)
+                    data = read_mesh(fp, idx)
                     test_data_list.append(data)
                     #train_val_test_files["test"].append(fp.split("/")[-1])
                 elif subject in X_val:
-                    data = read_mesh(fp)
+                    data = read_mesh(fp, idx)
                     val_data_list.append(data)
                 elif subject in X_train:
-                    data = read_mesh(fp)
+                    data = read_mesh(fp, idx)
                     train_data_list.append(data)
                     #train_val_test_files["train"].append(fp.split("/")[-1])
                 else:
