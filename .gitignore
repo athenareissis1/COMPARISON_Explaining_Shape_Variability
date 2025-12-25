@@ -16,6 +16,7 @@ synthetic_data/_delete/
 preprocessing/binary_segmentations/
 preprocessing/_delete/
 preprocessing/groomed_data/
+preprocessing/deformetrica_reg/
 
 utils/__pycache__/
 
