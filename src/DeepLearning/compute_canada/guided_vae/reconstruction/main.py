@@ -7,11 +7,14 @@ import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch_geometric.transforms as T
-from psbody.mesh import Mesh
+# from psbody.mesh import Mesh
+from .psbody_mesh_compat import Mesh
 from scipy import stats
-from reconstruction import AE, run, eval_error
-from datasets import MeshData
-from utils import utils, writer, DataLoader, mesh_sampling, sap, point_biserial_correlation
+from ..reconstruction import AE, run, eval_error
+# from .network import AE
+# from .train_eval import run, eval_error
+from ..datasets import MeshData
+from ..utils import utils, writer, DataLoader, mesh_sampling, sap, point_biserial_correlation
 import optuna
 from contextlib import redirect_stdout
 import shutil
@@ -47,6 +50,7 @@ parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--epochs', type=int, default=200)
 parser.add_argument('--beta', type=float, default=0)
 parser.add_argument('--wcls', type=int, default=1)
+parser.add_argument('--wreg', type=int, default=1)
 
 # others
 parser.add_argument('--correlation_loss', type=bool, default=False)
@@ -60,9 +64,10 @@ parser.add_argument('--threshold', type=float, default=0.025001)
 args = parser.parse_args()
 
 #args.work_dir = osp.dirname(osp.realpath(__file__))
-args.work_dir = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae"
-args.data_fp = osp.join(args.work_dir, 'data', args.dataset)
-args.out_dir = osp.join(args.work_dir, 'data', 'out', args.exp_name)
+args.work_dir = "/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae"
+# args.data_fp = osp.join(args.work_dir, 'data', args.dataset)
+args.data_fp = "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17"
+args.out_dir = osp.join(args.work_dir, 'out', args.exp_name)
 args.checkpoints_dir = osp.join(args.out_dir, 'checkpoints')
 #print(args)
 
@@ -148,9 +153,10 @@ up_transform_list = [
 ]
 
 # define model and optimizer and set parameters
-args.epochs = 300
+args.epochs = 600 #300
 args.batch_size = 16
-args.wcls = 31
+args.wcls = 0 #31
+args.wreg = 31
 args.beta = 0.0015296253151714872
 args.lr = 0.00036226239672775267
 args.lr_decay = 0.77
@@ -184,7 +190,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                             args.decay_step,
                                             gamma=args.lr_decay)
 
-args.guided = False
+args.guided = True #False
 args.guided_contrastive_loss = True
 args.correlation_loss = False
 args.tc = False
@@ -196,7 +202,7 @@ combined_train_loader = DataLoader(combined_train_dataset, batch_size=args.batch
 
 for j in range(10, 0, -1):
     run(model, combined_train_loader, val_loader, args.epochs, optimizer, scheduler,
-        writer, device, args.beta, args.wcls, args.guided, args.guided_contrastive_loss, 
+        writer, device, args.beta, args.wcls, args.wreg, args.guided, args.guided_contrastive_loss, 
         args.correlation_loss, args.latent_channels, args.weight_decay_c, args.temperature, args.threshold, args.tc,
         j)
 
@@ -235,7 +241,7 @@ for j in range(10, 0, -1):
                                                     sap_score_train, pcc_thick_train, sap_score_thick_train, euclidean_distance_train, j)
 
 
-    out_error_fp_train = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/train.txt'
+    out_error_fp_train = '/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/train.txt'
     with open(out_error_fp_train, 'a') as log_file_train:
         log_file_train.write('{:s}\n'.format(message_train))
 
@@ -294,9 +300,9 @@ for j in range(10, 0, -1):
     df1 = pd.DataFrame(angles.cpu().numpy())
     df2 = pd.DataFrame(thick.cpu().numpy())
     # File path for saving the data
-    excel_file_path_latent = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/latent_codes.csv"
-    excel_file_path_angles = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/angles.csv"
-    excel_file_path_thick = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/thick.csv"
+    excel_file_path_latent = "/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/latent_codes.csv"
+    excel_file_path_angles = "/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/angles.csv"
+    excel_file_path_thick = "/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/thick.csv"
     # Save the DataFrame to an Excel file
     df.to_csv(excel_file_path_latent, index=False)
     df1.to_csv(excel_file_path_angles, index=False)
@@ -306,12 +312,12 @@ for j in range(10, 0, -1):
                                                     sap_score, pcc_thick, sap_score_thick, euclidean_distance, j)
 
 
-    out_error_fp = '/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/test.txt'
+    out_error_fp = '/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/test.txt'
     with open(out_error_fp, 'a') as log_file:
         log_file.write('{:s}\n'.format(message))
 
     if sap_score >= 0:
-        model_path = f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/{j}/"
+        model_path = f"/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/{j}/"
         os.makedirs(model_path)
         torch.save(sap_score, f"{model_path}sap_score.pt") 
         torch.save(sap_score_thick, f"{model_path}sap_score_thick.pt") 
@@ -326,7 +332,6 @@ for j in range(10, 0, -1):
         torch.save(meshdata.std, f"{model_path}std.pt")        
         torch.save(meshdata.mean, f"{model_path}mean.pt")        
         torch.save(meshdata.template_face, f"{model_path}faces.pt")
-        shutil.copy("/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/processed/train_val_test_files.pt", f"{model_path}train_val_test_files.pt")
-        shutil.copy("/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/reconstruction/network.py", f"{model_path}network.py")
-        shutil.copy("/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/conv/spiralconv.py", f"{model_path}spiralconv.py")
-
+        shutil.copy("/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/processed/train_val_test_files.pt", f"{model_path}train_val_test_files.pt")
+        shutil.copy("/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/reconstruction/network.py", f"{model_path}network.py")
+        shutil.copy("/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/conv/spiralconv.py", f"{model_path}spiralconv.py")

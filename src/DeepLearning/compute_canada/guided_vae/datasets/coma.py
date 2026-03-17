@@ -4,9 +4,10 @@ from glob import glob
 from sklearn.model_selection import train_test_split
 import torch
 from torch_geometric.data import InMemoryDataset, extract_zip
-from utils.read import read_mesh
+from ..utils.read import read_mesh
 import random
 from tqdm import tqdm
+import json
 
 
 class CoMA(InMemoryDataset):
@@ -91,20 +92,31 @@ class CoMA(InMemoryDataset):
     def process(self):
         print('Processing...')
 
-        labels = torch.load(f"/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/labels.pt")
+        # labels = torch.load(f"/home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/labels.pt")
 
-        #X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), stratify=list(labels.values()), test_size=0.2, random_state=0)
-        X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), test_size=0.2, random_state=28)
-        #random.seed(3783)
-        #indices = random.sample(range(0, 101), 51)
-        #X_val = [X_test[index] for index in indices]
-        #X_test = [j for i, j in enumerate(X_test) if i not in indices]
-        X_val, X_test, y_val, y_test = train_test_split(X_test, y_test, test_size=0.5, random_state=28)
+        # #X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), stratify=list(labels.values()), test_size=0.2, random_state=0)
+        # X_train, X_test, y_train, y_test = train_test_split(list(labels.keys()), list(labels.values()), test_size=0.2, random_state=28)
+        # #random.seed(3783)
+        # #indices = random.sample(range(0, 101), 51)
+        # #X_val = [X_test[index] for index in indices]
+        # #X_test = [j for i, j in enumerate(X_test) if i not in indices]
+        # X_val, X_test, y_val, y_test = train_test_split(X_test, y_test, test_size=0.5, random_state=28)
 
-        #X_val = X_test[:51]
-        #X_test_new = X_test[51:]
+        # #X_val = X_test[:51]
+        # #X_test_new = X_test[51:]
 
-        fps = glob(osp.join(self.raw_dir, 'torus/*.ply'))
+        # Load predefined subject splits from JSON
+        split_json_path = (f"{self.root}/splits/train_val_test_files.json")
+        with open(split_json_path, "r") as f:
+            split_def = json.load(f)
+
+        X_train = split_def["train"]
+        X_val = split_def["val"]
+        X_test = split_def["test"]
+
+        # fps = glob(osp.join(self.raw_dir, 'torus/*.ply'))
+        fps = glob(osp.join(self.root, '*.ply'))
+
         '''
         if len(fps) == 0:
             extract_zip(self.raw_paths[0], self.raw_dir, log=False)
@@ -117,22 +129,25 @@ class CoMA(InMemoryDataset):
             # if self.pre_transform is not None:
             #     data = self.pre_transform(data)
 
-            subject = fp.split("/")[-1].split(".")[0]
+            subject = fp.split("/")[-1] #.split(".")[0]
             if self.split == 'interpolation':
                 #if (idx % 100) < 10:
                 if subject in X_test:
+                    # print("TEST")
                     data = read_mesh(fp)
                     test_data_list.append(data)
                     #train_val_test_files["test"].append(fp.split("/")[-1])
                 elif subject in X_val:
+                    # print("VAL")
                     data = read_mesh(fp)
                     val_data_list.append(data)
                 elif subject in X_train:
+                    # print("TRAIN")
                     data = read_mesh(fp)
                     train_data_list.append(data)
                     #train_val_test_files["train"].append(fp.split("/")[-1])
                 else:
-                    #raise RuntimeError('ERROR...')
+                    raise RuntimeError('ERROR...')
                     continue
 
             # elif self.split == 'extrapolation':

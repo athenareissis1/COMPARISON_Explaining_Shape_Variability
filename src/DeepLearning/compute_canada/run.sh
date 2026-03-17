@@ -6,6 +6,6 @@
 #SBATCH --mem=125G
 #SBATCH --time=10:00:00
 #SBATCH --account=def-uofavis-ab
-module load cuda cudnn
-source ~/ENV/bin/activate
-python /home/jakaria/jakariaTest/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/reconstruction/main.py
+# module load cuda cudnn
+# source ~/ENV/bin/activate
+python /home/athena/COMPARISON_Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/reconstruction/main.py

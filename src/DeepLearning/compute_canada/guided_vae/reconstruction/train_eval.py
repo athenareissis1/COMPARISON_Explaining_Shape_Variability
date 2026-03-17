@@ -3,10 +3,11 @@ import math
 import os
 import torch
 import torch.nn.functional as F
-from reconstruction import Regressor, Classifier
-from reconstruction.loss import ClsCorrelationLoss, RegCorrelationLoss, SNNLoss, SNNRegLoss
+# from ..reconstruction import Regressor, Classifier
+from .network import Regressor, Classifier
+from ..reconstruction.loss import ClsCorrelationLoss, RegCorrelationLoss, SNNLoss, SNNRegLoss
 from torch.utils.data import Subset
-from utils import DataLoader
+from ..utils import DataLoader
 import random
 n_train_steps = 0
 
@@ -147,7 +148,7 @@ def loss_function(original, reconstruction, mu, log_var, beta):
     return reconstruction_loss + beta*kld_loss
 
 def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
-        device, beta, w_cls, guided, guided_contrastive_loss, correlation_loss, latent_channels, weight_decay_c, temp, threshold, tc, i):
+        device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, latent_channels, weight_decay_c, temp, threshold, tc, i):
     
     model_c = Classifier(latent_channels).to(device)
     optimizer_c = torch.optim.Adam(model_c.parameters(), lr=1e-3, weight_decay=weight_decay_c)
@@ -166,7 +167,7 @@ def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
 
     for epoch in range(1, epochs + 1):
         t = time.time()
-        train_loss = train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, train_loader, device, beta, w_cls, guided, guided_contrastive_loss, correlation_loss, temp, threshold, tc, i)
+        train_loss = train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, train_loader, device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, temp, threshold, tc, i)
         t_duration = time.time() - t
         test_time = time.time()
         test_loss = test(model, test_loader, device, beta)
@@ -182,11 +183,13 @@ def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
         }
 
         writer.print_info(info)
-        writer.save_checkpoint(model, optimizer, scheduler, epoch)
-        torch.save(model.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_state_dict.pt")
-        torch.save(model_c.state_dict(), "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_c_state_dict.pt")
+        # only save check_point if epoch is divisable by 50 
+        if epoch % 50 == 0:
+            writer.save_checkpoint(model, optimizer, scheduler, epoch)
+        torch.save(model.state_dict(), "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_state_dict.pt")
+        torch.save(model_c.state_dict(), "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_c_state_dict.pt")
 
-def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, loader, device, beta, w_cls, guided, guided_contrastive_loss, correlation_loss, temp, threshold, tc, i):
+def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, loader, device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, temp, threshold, tc, i):
     global n_train_steps
     n_train_steps += 1
     model.train()
@@ -271,7 +274,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             #Regression Loss
             SNN_Loss_Reg = SNNRegLoss(temp, threshold)
             loss_snn_reg = SNN_Loss_Reg(z, label[:, :, 2])
-            loss += loss_snn_reg * w_cls
+            loss += loss_snn_reg * w_reg
             #print(loss_snn.item())
             snnl_reg += loss_snn_reg.item()
 
@@ -286,7 +289,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             loss += loss_corr_cls * w_cls
             #reg
             loss_corr_reg = corr_loss_reg(z, label[:, :, 2])
-            loss += loss_corr_reg * w_cls
+            loss += loss_corr_reg * w_reg
             #print(corr_loss.item())
             corrl_cls += loss_corr_cls.item()
             corrl_reg += loss_corr_reg.item()
@@ -325,7 +328,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             loss = loss_function(x, out, mu, log_var, beta)  
             optimizer.zero_grad()
             loss_cls_2 = F.mse_loss(re_2, label[:, :, 2], reduction='mean')
-            loss += loss_cls_2 * w_cls
+            loss += loss_cls_2 * w_reg
             #print(re_2[0:5])
             #print(label[:, :, 1][0:5])
             #print(loss_cls_2.item())
@@ -341,7 +344,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             cls1_2 = model_c_2(z)
             loss = F.mse_loss(cls1_2, label[:, :, 2], reduction='mean')
             cls1_error_2 += loss.item()
-            loss *= w_cls
+            loss *= w_reg
             loss.backward()
             optimizer_c_2.step()
 
@@ -354,7 +357,7 @@ def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, load
             label1 = torch.empty_like(label[:, :, 1]).fill_(0.5)
             loss = F.mse_loss(cls2_2, label1, reduction='mean')
             cls2_error_2 += loss.item()
-            loss *= w_cls
+            loss *= w_reg
             loss.backward()
             optimizer.step()
     #print(corrl_cls)

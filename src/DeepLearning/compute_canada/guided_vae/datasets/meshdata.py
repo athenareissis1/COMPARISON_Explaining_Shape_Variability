@@ -1,5 +1,6 @@
-import openmesh as om
-from datasets import CoMA
+# import openmesh as om
+import trimesh
+from ..datasets import CoMA
 
 
 class MeshData(object):
@@ -48,9 +49,16 @@ class MeshData(object):
                                  transform=self.transform,
                                  pre_transform=self.pre_transform)
 
-        tmp_mesh = om.read_trimesh(self.template_fp)
-        self.template_points = tmp_mesh.points()
-        self.template_face = tmp_mesh.face_vertex_indices()
+        # tmp_mesh = om.read_trimesh(self.template_fp)
+        # self.template_points = tmp_mesh.points()
+        # self.template_face = tmp_mesh.face_vertex_indices()
+        tmp_mesh = trimesh.load(self.template_fp, process=False)
+        if not isinstance(tmp_mesh, trimesh.Trimesh):
+            raise ValueError(f"Expected triangular mesh at {self.template_fp}, got {type(tmp_mesh)}")
+        # match openmesh API: points() -> vertices, face_vertex_indices() -> faces
+        self.template_points = tmp_mesh.vertices
+        self.template_face = tmp_mesh.faces
+
         self.num_nodes = self.train_dataset[0].num_nodes
 
         self.num_train_graph = len(self.train_dataset)
@@ -75,4 +83,10 @@ class MeshData(object):
 
     def save_mesh(self, fp, x):
         x = x * self.std + self.mean
-        om.write_mesh(fp, om.TriMesh(x.numpy(), self.template_face))
+        # om.write_mesh(fp, om.TriMesh(x.numpy(), self.template_face))
+        
+        # x: (num_vertices, 3), template_face: (F, 3) indices
+        mesh = trimesh.Trimesh(vertices=x.numpy(),
+                               faces=self.template_face,
+                               process=False)
+        mesh.export(fp)

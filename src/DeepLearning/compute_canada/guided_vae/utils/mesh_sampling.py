@@ -3,8 +3,8 @@ import heapq
 import numpy as np
 import os
 import scipy.sparse as sp
-from psbody.mesh import Mesh
-
+# from psbody.mesh import Mesh
+from ..reconstruction.psbody_mesh_compat import Mesh
 
 def row(A):
     return A.reshape((1, -1))

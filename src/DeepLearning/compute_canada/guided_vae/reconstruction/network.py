@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 
-from conv import SpiralConv
+from ..conv import SpiralConv
 
 
 def Pool(x, trans, dim=1):

@@ -4,7 +4,7 @@ import shutil
 import torch
 from torch_geometric.data import InMemoryDataset, extract_zip
 
-from utils import read_mesh
+from ..utils import read_mesh
 
 
 class FAUST(InMemoryDataset):
