@@ -8,7 +8,7 @@ from scipy import stats
 
 device = torch.device('cuda', 0)
 # Set the path to the saved model directory
-base_path = "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models"
+base_path =  "/home/jakaria/Explaining_Shape_Variability/src/DeepLearning/compute_canada/guided_vae/data/CoMA/raw/torus/models"
 
 # Get a list of all folders within the "models" folder
 folders = [folder for folder in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, folder))]

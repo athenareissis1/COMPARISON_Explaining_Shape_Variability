@@ -148,7 +148,7 @@ def loss_function(original, reconstruction, mu, log_var, beta):
     return reconstruction_loss + beta*kld_loss
 
 def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
-        device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, latent_channels, weight_decay_c, temp, threshold, tc, i):
+        device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, latent_channels, weight_decay_c, temp, threshold, tc, out_dir, i):
     
     model_c = Classifier(latent_channels).to(device)
     optimizer_c = torch.optim.Adam(model_c.parameters(), lr=1e-3, weight_decay=weight_decay_c)
@@ -184,10 +184,17 @@ def run(model, train_loader, test_loader, epochs, optimizer, scheduler, writer,
 
         writer.print_info(info)
         # only save check_point if epoch is divisable by 50 
-        if epoch % 50 == 0:
+        if epoch % 100 == 0:
             writer.save_checkpoint(model, optimizer, scheduler, epoch)
-        torch.save(model.state_dict(), "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_state_dict.pt")
-        torch.save(model_c.state_dict(), "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17/raw/torus/models_contrastive_inhib_decrease_trainset_tc/model_c_state_dict.pt")
+
+        model_dir = os.path.join(out_dir, "models_contrastive_inhib_decrease_trainset_tc")
+        os.makedirs(model_dir, exist_ok=True)
+
+        torch.save(model.state_dict(), os.path.join(model_dir, "model_state_dict.pt"))
+        torch.save(model_c.state_dict(), os.path.join(model_dir, "model_c_state_dict.pt"))
+
+        # torch.save(model.state_dict(), f"{out_dir}/models_contrastive_inhib_decrease_trainset_tc/model_state_dict.pt")
+        # torch.save(model_c.state_dict(), f"{out_dir}/models_contrastive_inhib_decrease_trainset_tc/model_c_state_dict.pt")
 
 def train(model, optimizer, model_c, optimizer_c, model_c_2, optimizer_c_2, loader, device, beta, w_cls, w_reg, guided, guided_contrastive_loss, correlation_loss, temp, threshold, tc, i):
     global n_train_steps

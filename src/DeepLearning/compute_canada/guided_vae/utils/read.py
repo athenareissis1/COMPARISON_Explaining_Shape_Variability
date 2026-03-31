@@ -36,6 +36,14 @@ def read_mesh(path):
     labels = torch.load(
         "/raid/compass/athena/data/PLY_friday_unified_meshes_subset_0_17/raw/labels.pt")
     subject = str(path.split("/")[-1].split(".")[0])
-    y = torch.tensor([labels[subject]], dtype=torch.float32)
+    fname = int(subject.replace("f_", ""))
 
-    return Data(x=x, edge_index=edge_index, face=face, y=y)
+    # y = torch.tensor(labels[subject][:3], dtype=torch.float32)
+    # y = torch.tensor([[labels[subject]]], dtype=torch.float32)
+    y = torch.tensor(labels[subject], dtype=torch.float32).unsqueeze(0)
+    fname = torch.tensor([fname], dtype=torch.float32) 
+
+    data = Data(x=x, edge_index=edge_index, face=face, y=y, fname=fname)
+
+    # return Data(x=x, edge_index=edge_index, face=face, y=y)
+    return data

@@ -19,6 +19,12 @@ preprocessing/groomed_data/
 
 utils/__pycache__/
 
+src/DeepLearning/compute_canada/guided_vae/utils/__pycache__/
+src/DeepLearning/compute_canada/guided_vae/tests/__pycache__/
+src/DeepLearning/compute_canada/guided_vae/reconstruction/__pycache__/
+src/DeepLearning/compute_canada/guided_vae/datasets/__pycache__/
+src/DeepLearning/compute_canada/guided_vae/conv/__pycache__/
+
 src/DeepLearning/compute_canada/mesh/
 src/DeepLearning/compute_canada/guided_vae/out/
 src/DeepLearning/compute_canada/guided_vae/data/
@@ -44,3 +50,6 @@ src/ShapeWorks/demographics.csv
 src/DeepLearning/.ipynb_checkpoints/
 
 /.vscode/
+
+src/DeepLearning/compute_canada/guided_vae/tests/measurements
+src/DeepLearning/compute_canada/guided_vae/tests/disentanglement_lib
